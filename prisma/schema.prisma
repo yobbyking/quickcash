@@ -1,0 +1,123 @@
+// Prisma schema for SwiftPay — earn-by-task/survey/ad-watch fintech app
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  username        String   @unique
+  phone           String   @unique
+  passwordHash    String
+  isVerified      Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  balance         Float    @default(0)
+  totalEarned     Float    @default(0)
+  tasksCompleted Int      @default(0)
+  adsWatchedToday Int      @default(0)
+  adsWatchedTotal Int      @default(0)
+  lastAdDay       String?
+  referralCode    String   @unique
+  referredById    String?
+  referrer        User?    @relation("Referral", fields: [referredById], references: [id])
+  referrals       User[]   @relation("Referral")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  payments        Payment[]
+  transactions    Transaction[]
+  sessions        Session[]
+  taskAttempts    TaskAttempt[]
+  adWatches       AdWatch[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  type            String   // 'ACTIVATION' | 'DEPOSIT' | 'WITHDRAWAL'
+  amount          Float
+  phone           String
+  status          String   @default("PENDING")
+  checkoutRequestId String?
+  merchantRequestId String?
+  mpesaReceipt    String?
+  failureReason   String?
+  accountReference String?
+  description     String?
+  webhookReceived Boolean  @default(false)
+  webhookPayload  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // 'TASK_REWARD' | 'AD_REWARD' | 'REFERRAL_BONUS' | 'WITHDRAWAL' | 'DEPOSIT' | 'ACTIVATION'
+  amount      Float
+  direction   String   // 'CREDIT' | 'DEBIT'
+  status      String   @default("COMPLETED")
+  reference   String   @unique
+  description String?
+  relatedPaymentId String?
+  relatedTaskId   String?
+  relatedAdWatchId String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id           String   @id @default(cuid())
+  title        String
+  description  String
+  category     String   // 'SURVEY' | 'QUESTION' | 'POLL' | 'OPINION'
+  payout       Float
+  estimatedMinutes Int
+  questions    String   // JSON: [{ id, text, type, options? }]
+  requiredAnswers Int  @default(1)
+  isActive     Boolean  @default(true)
+  maxAttempts  Int      @default(1)
+  createdAt    DateTime @default(now())
+  attempts     TaskAttempt[]
+}
+
+model TaskAttempt {
+  id          String   @id @default(cuid())
+  userId      String
+  taskId      String
+  status      String   @default("PENDING") // PENDING | COMPLETED | REJECTED
+  answers     String   // JSON: [{ questionId, value }]
+  reward      Float    @default(0)
+  rejectionReason String?
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model AdWatch {
+  id          String   @id @default(cuid())
+  userId      String
+  adId        String
+  adTitle     String
+  reward      Float
+  durationSec Int
+  status      String   @default("COMPLETED") // COMPLETED | ABANDONED
+  watchedAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
