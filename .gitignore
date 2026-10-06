@@ -84,3 +84,8 @@ next-env.d.ts
 /examples/
 /tests/
 /Caddyfile
+
+# Other repos in same workspace (not part of QuickCash)
+/toxic-tech-vps/
+/ubuntu-vps/
+/yobbyking-xd-bot/
