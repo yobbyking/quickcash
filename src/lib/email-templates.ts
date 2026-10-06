@@ -68,7 +68,6 @@ const footer = `            </td>
   </table>
 </body>
 </html>`;
-}
 
 // Reusable info row (icon + label + value)
 function infoRow(label: string, value: string): string {

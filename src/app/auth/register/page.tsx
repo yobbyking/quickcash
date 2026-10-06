@@ -81,9 +81,9 @@ function RegisterContent() {
           toast.error('Enter email and password');
           return;
         }
-        // Use the auth-context's signUpWithEmail
-        const { signUpWithEmail } = useAuth();
-        await signUpWithEmail(form.email, form.password);
+        // Import auth directly and create the user
+        const { createUserWithEmailAndPassword } = await import('firebase/auth');
+        await createUserWithEmailAndPassword(auth, form.email, form.password);
         toast.success('Account created! Complete your details below.');
         return;
       }
