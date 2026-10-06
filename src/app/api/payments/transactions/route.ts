@@ -7,18 +7,15 @@ export async function GET(req: NextRequest) {
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-    const url = new URL(req.url);
-    const limit = Math.min(Number(url.searchParams.get('limit') || 50), 200);
-
+    const limit = Math.min(Number(new URL(req.url).searchParams.get('limit') || 100), 500);
     const transactions = await db.transaction.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
-
     return NextResponse.json({ transactions });
   } catch (err) {
     console.error('[transactions] error:', err);
-    return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
 }

@@ -3,301 +3,252 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AuthShell } from "@/components/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 import {
-  Eye, EyeOff, User, Mail, Phone, Lock, Gift, ArrowRight, CheckCircle2,
-  Sparkles, Shield, ChevronRight,
+  Eye, EyeOff, User, Mail, Phone, Lock, ArrowRight, Sparkles,
+  Shield, CheckCircle2, Crown, Trophy, Star, Chrome,
 } from "lucide-react";
+import { GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo } from 'firebase/auth';
+import { auth } from "@/lib/firebase";
+
+const TIERS = [
+  { key: 'silver', name: 'Silver', icon: Trophy, badge: 'Starter', reward: 'KES 30-80/task', fee: 199, tone: 'slate' },
+  { key: 'gold', name: 'Gold', icon: Crown, badge: 'Popular', reward: 'KES 100-250/task', fee: 299, tone: 'amber' },
+  { key: 'vip', name: 'VIP', icon: Sparkles, badge: 'Premium', reward: 'KES 300-800/task', fee: 399, tone: 'violet' },
+];
 
 function RegisterContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const [refCode, setRefCode] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const { appUser, needsRegistration, completeRegistration, signInWithGoogle, firebaseUser, loading, error } = useAuth();
+
   const [form, setForm] = useState({
-    email: "",
-    username: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
+    email: '',
+    password: '',
+    username: '',
+    phone: '',
+    referralCode: '',
   });
-
-  // Real-time password strength meter
-  const pwdStrength = (() => {
-    const pwd = form.password;
-    if (!pwd) return { score: 0, label: "", color: "bg-white/5", text: "text-muted-foreground" };
-    let score = 0;
-    if (pwd.length >= 6) score++;
-    if (pwd.length >= 10) score++;
-    if (/[A-Z]/.test(pwd)) score++;
-    if (/[0-9]/.test(pwd)) score++;
-    if (/[^A-Za-z0-9]/.test(pwd)) score++;
-    if (score >= 4) return { score, label: "Strong", color: "bg-emerald-500", text: "text-emerald-400" };
-    if (score >= 3) return { score, label: "Good", color: "bg-cyan-500", text: "text-cyan-400" };
-    if (score >= 1) return { score, label: "Weak", color: "bg-amber-500", text: "text-amber-400" };
-    return { score, label: "Too short", color: "bg-red-500", text: "text-red-400" };
-  })();
-
-  // Match indicator
-  const pwdMatch = form.password && form.confirmPassword
-    ? form.password === form.confirmPassword
-      ? { ok: true, msg: "Passwords match" }
-      : { ok: false, msg: "Passwords don't match" }
-    : null;
+  const [tier, setTier] = useState('gold');
+  const [showPwd, setShowPwd] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const ref = params.get("ref") || "";
-    if (ref) setRefCode(ref.toUpperCase());
+    const ref = params.get('ref');
+    if (ref) setForm(f => ({ ...f, referralCode: ref.toUpperCase() }));
+    const t = params.get('tier');
+    if (t && ['silver', 'gold', 'vip'].includes(t)) setTier(t);
   }, [params]);
 
-  const update = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
+  // If user is already logged in and activated, redirect
+  useEffect(() => {
+    if (!loading && appUser) {
+      router.push(appUser.isActivated ? '/dashboard' : '/auth/activate');
+    }
+  }, [appUser, loading, router]);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const update = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleGoogle = async () => {
+    setSubmitting(true);
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, referralCode: refCode || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Registration failed");
-        return;
-      }
-      toast.success("Account created! Activate with M-Pesa to start earning.");
-      router.push("/auth/verify");
-    } catch (err) {
-      toast.error("Network error — please try again");
+      await signInWithGoogle();
+    } catch (err: any) {
+      toast.error(err.message || 'Google sign-in failed');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      if (!firebaseUser) {
+        // Need to sign up with Firebase first
+        if (!form.email || !form.password) {
+          toast.error('Enter email and password');
+          return;
+        }
+        // Use the auth-context's signUpWithEmail
+        const { signUpWithEmail } = useAuth();
+        await signUpWithEmail(form.email, form.password);
+        toast.success('Account created! Complete your details below.');
+        return;
+      }
+      // Already have a Firebase user → complete registration
+      await completeRegistration({
+        username: form.username,
+        phone: form.phone,
+        tier,
+        referralCode: form.referralCode || undefined,
+      });
+      toast.success('Registration complete! Activate your account to start earning.');
+      router.push('/auth/activate');
+    } catch (err: any) {
+      toast.error(err.message || 'Registration failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Show form: Firebase user needs to complete registration, OR no Firebase user yet
+  const showExtraFields = needsRegistration || !!firebaseUser;
+
   return (
-    <AuthShell
-      title="Create your account"
-      subtitle="Join thousands earning KES daily on Kenya's premium wallet."
-      footerHref="/auth/login"
-      footerLink="Sign in instead"
-      footerActionText="Already have an account?"
-    >
-      <form onSubmit={submit} className="space-y-5">
-        {/* Referral badge — premium gold */}
-        {refCode && (
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-amber-500/15 to-amber-400/10 border border-amber-500/30 text-amber-200">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
-              <Gift className="w-4 h-4" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold">Referred by <span className="font-mono font-bold">{refCode}</span></p>
-              <p className="text-[11px] text-amber-300/80">You'll both earn 10 KES after activation</p>
-            </div>
-          </div>
-        )}
-
-        {/* Email */}
-        <Field icon={Mail} label="Email address" htmlFor="email">
-          <Input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={form.email}
-            onChange={e => update("email", e.target.value)}
-            className="pl-11 bg-white/5 border-white/10 h-12 text-base focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-            placeholder="you@example.com"
-          />
-        </Field>
-
-        {/* Username */}
-        <Field icon={User} label="Username" htmlFor="username" hint="3–20 chars · letters, numbers, underscores">
-          <Input
-            id="username"
-            type="text"
-            required
-            minLength={3}
-            maxLength={20}
-            pattern="^[a-zA-Z0-9_]+$"
-            autoComplete="username"
-            value={form.username}
-            onChange={e => update("username", e.target.value)}
-            className="pl-11 bg-white/5 border-white/10 h-12 text-base focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-            placeholder="yobby1"
-          />
-        </Field>
-
-        {/* Phone */}
-        <Field icon={Phone} label="M-Pesa Phone Number" htmlFor="phone" hint="Safaricom number registered with M-Pesa">
-          <Input
-            id="phone"
-            type="tel"
-            required
-            autoComplete="tel"
-            value={form.phone}
-            onChange={e => update("phone", e.target.value)}
-            className="pl-11 bg-white/5 border-white/10 h-12 text-base focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-            placeholder="0712345678"
-          />
-        </Field>
-
-        {/* Password + Confirm — side by side on larger screens */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                id="password"
-                type={showPwd ? "text" : "password"}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                value={form.password}
-                onChange={e => update("password", e.target.value)}
-                className="pl-11 pr-11 bg-white/5 border-white/10 h-12 text-base focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-                placeholder="••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd(s => !s)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {form.password && (
-              <div className="space-y-1 pt-1">
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <div
-                      key={i}
-                      className={`h-1 flex-1 rounded-full transition-colors ${i <= pwdStrength.score ? pwdStrength.color : "bg-white/5"}`}
-                    />
-                  ))}
-                </div>
-                <p className={`text-[10px] ${pwdStrength.text}`}>{pwdStrength.label}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="confirmPassword" className="text-xs uppercase tracking-wider text-muted-foreground">Confirm</Label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                id="confirmPassword"
-                type={showConfirm ? "text" : "password"}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                value={form.confirmPassword}
-                onChange={e => update("confirmPassword", e.target.value)}
-                className={`pl-11 pr-11 bg-white/5 border-white/10 h-12 text-base focus-visible:ring-emerald-500/20 ${
-                  pwdMatch?.ok === false ? "border-red-500/50" : pwdMatch?.ok === true ? "border-emerald-500/50" : "border-white/10"
-                }`}
-                placeholder="••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm(s => !s)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {pwdMatch && (
-              <p className={`text-[10px] flex items-center gap-1 ${pwdMatch.ok ? "text-emerald-400" : "text-red-400"}`}>
-                {pwdMatch.ok ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3">⚠</span>}
-                {pwdMatch.msg}
-              </p>
-            )}
-          </div>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-6">
+        {/* Brand */}
+        <div className="text-center">
+          <Link href="/" className="inline-flex items-center gap-2 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-amber-500/40">Q</div>
+            <span className="text-2xl font-bold">QuickCash</span>
+          </Link>
+          <p className="text-sm text-muted-foreground">Create your free account in 30 seconds</p>
         </div>
 
-        {/* Referral code */}
-        <Field icon={Gift} label="Referral code (optional)" htmlFor="refCode">
-          <Input
-            id="refCode"
-            type="text"
-            value={refCode}
-            onChange={e => setRefCode(e.target.value.toUpperCase())}
-            className="pl-11 bg-white/5 border-white/10 h-12 text-base font-mono uppercase focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-            placeholder="YOBBY1"
-          />
-        </Field>
-
-        {/* CTA button */}
-        <Button
-          type="submit"
-          disabled={loading || (pwdMatch?.ok === false)}
-          size="lg"
-          className="w-full h-12 bg-gradient-to-r from-emerald-500 via-emerald-400 to-cyan-500 text-slate-950 hover:from-emerald-400 hover:via-emerald-300 hover:to-cyan-400 glow font-semibold text-base group"
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" />
-              Creating account...
-            </span>
-          ) : (
+        {/* Card */}
+        <div className="glass-strong gradient-border rounded-3xl p-6 md:p-8">
+          {/* Google sign in */}
+          {!firebaseUser && (
             <>
-              Create account & start earning
-              <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <Button
+                onClick={handleGoogle}
+                disabled={submitting}
+                size="lg"
+                variant="outline"
+                className="w-full h-12 glass mb-4 text-base font-medium"
+              >
+                <Chrome className="w-5 h-5 mr-2 text-blue-400" />
+                Continue with Google
+              </Button>
+              <div className="flex items-center gap-3 my-4">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-xs text-muted-foreground uppercase tracking-wider">or sign up with email</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
             </>
           )}
-        </Button>
 
-        {/* Activation fee disclosure */}
-        <div className="rounded-2xl p-3.5 bg-gradient-to-br from-amber-500/8 to-amber-400/5 border border-amber-500/20 text-xs space-y-2">
-          <div className="flex items-start gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          {firebaseUser && (
+            <div className="mb-4 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>Signed in as <span className="font-medium">{firebaseUser.email}</span> — complete your details</span>
             </div>
-            <div className="flex-1">
-              <p className="font-semibold text-amber-200 mb-0.5">One-time activation</p>
-              <p className="text-muted-foreground leading-relaxed">
-                After signing up, you'll pay <span className="text-amber-200 font-semibold">150 KES</span> via M-Pesa STK push to unlock earning, withdrawals, and referral rewards.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground pt-1 border-t border-amber-500/10">
-            <Shield className="w-3 h-3 text-emerald-400" />
-            No subscription · No monthly fees · Cancel anytime
-          </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email + password — only show if no Firebase user yet */}
+            {!firebaseUser && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="email" type="email" required value={form.email} onChange={e => update('email', e.target.value)} className="pl-11 bg-white/5 border-white/10 h-12" placeholder="you@example.com" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="password" type={showPwd ? 'text' : 'password'} required minLength={6} value={form.password} onChange={e => update('password', e.target.value)} className="pl-11 pr-11 bg-white/5 border-white/10 h-12" placeholder="Min 6 chars" />
+                    <button type="button" onClick={() => setShowPwd(s => !s)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showExtraFields && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="username" className="text-xs uppercase tracking-wider text-muted-foreground">Username</Label>
+                    <div className="relative">
+                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input id="username" type="text" required minLength={3} maxLength={20} pattern="^[a-zA-Z0-9_]+$" value={form.username} onChange={e => update('username', e.target.value)} className="pl-11 bg-white/5 border-white/10 h-12" placeholder="yobby1" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phone" className="text-xs uppercase tracking-wider text-muted-foreground">M-Pesa Phone</Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input id="phone" type="tel" required value={form.phone} onChange={e => update('phone', e.target.value)} className="pl-11 bg-white/5 border-white/10 h-12" placeholder="254712345678" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Choose your tier</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TIERS.map(t => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setTier(t.key)}
+                        className={`p-3 rounded-2xl border text-left transition-all ${tier === t.key ? `border-amber-500/60 bg-amber-500/10 glow` : 'border-white/10 bg-white/5 hover:border-white/20'}`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <t.icon className={`w-3.5 h-3.5 ${tier === t.key ? 'text-amber-400' : 'text-muted-foreground'}`} />
+                          <span className={`text-sm font-semibold ${tier === t.key ? 'text-amber-300' : ''}`}>{t.name}</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{t.reward}</p>
+                        <p className="text-[10px] mt-0.5">KES {t.fee} activation</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="refCode" className="text-xs uppercase tracking-wider text-muted-foreground">Referral code (optional)</Label>
+                  <Input id="refCode" type="text" value={form.referralCode} onChange={e => update('referralCode', e.target.value.toUpperCase())} className="bg-white/5 border-white/10 h-12 font-mono uppercase" placeholder="YOBBY1" />
+                </div>
+              </>
+            )}
+
+            <Button
+              type="submit"
+              disabled={submitting || loading}
+              size="lg"
+              className="w-full h-12 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:from-amber-400 hover:to-orange-400 glow font-semibold"
+            >
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" />
+                  Creating account...
+                </span>
+              ) : (
+                <>
+                  {firebaseUser ? 'Complete registration' : 'Create account'} <ArrowRight className="ml-2 w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </form>
+
+          <p className="text-center text-xs text-muted-foreground mt-4">
+            Already have an account? <Link href="/auth/login" className="text-amber-400 hover:text-amber-300 font-medium">Sign in</Link>
+          </p>
         </div>
 
-        {/* Terms */}
-        <p className="text-[10px] text-center text-muted-foreground leading-relaxed">
-          By creating an account, you agree to our Terms of Service and Privacy Policy. BCLB No. {process.env.NEXT_PUBLIC_BCLB_NUMBER || "7YGEB3OD"}.
+        <p className="text-center text-xs text-muted-foreground">
+          <Shield className="inline w-3 h-3 mr-1 text-emerald-400" />
+          Protected by Firebase Authentication · Bank-grade encryption
         </p>
-      </form>
-    </AuthShell>
-  );
-}
-
-function Field({ icon: Icon, label, htmlFor, hint, children }: { icon: any; label: string; htmlFor: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={htmlFor} className="text-xs uppercase tracking-wider text-muted-foreground">{label}</Label>
-      <div className="relative">
-        <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        {children}
       </div>
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<AuthShell title="Create your account"><div className="text-center text-muted-foreground">Loading...</div></AuthShell>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading...</div>}>
       <RegisterContent />
     </Suspense>
   );

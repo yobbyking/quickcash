@@ -1,138 +1,128 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AuthShell } from "@/components/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Eye, EyeOff, Lock, ArrowRight, Mail, User, Sparkles } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import {
+  Eye, EyeOff, Lock, ArrowRight, Chrome, Shield,
+} from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
+  const { appUser, loading, signInWithGoogle, signInWithEmail } = useAuth();
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && appUser) {
+      router.push(appUser.isActivated ? '/dashboard' : '/auth/activate');
+    }
+  }, [appUser, loading, router]);
+
+  const handleGoogle = async () => {
+    setSubmitting(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Login failed");
-        return;
-      }
-      toast.success("Welcome back!");
-      if (!data.isVerified) {
-        router.push("/auth/verify");
-      } else {
-        router.push("/dashboard");
-      }
-    } catch {
-      toast.error("Network error");
+      await signInWithGoogle();
+    } catch (err: any) {
+      toast.error(err.message || 'Google sign-in failed');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await signInWithEmail(email, password);
+      toast.success('Welcome back!');
+    } catch (err: any) {
+      toast.error(err.message || 'Login failed');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <AuthShell
-      title="Welcome back"
-      subtitle="Sign in to your SwiftPay account and keep earning."
-      footerHref="/auth/register"
-      footerLink="Create one now"
-      footerActionText="Don't have an account?"
-    >
-      <form onSubmit={submit} className="space-y-5">
-        <div className="space-y-1.5">
-          <Label htmlFor="identifier" className="text-xs uppercase tracking-wider text-muted-foreground">Email or Username</Label>
-          <div className="relative">
-            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              id="identifier"
-              type="text"
-              required
-              value={identifier}
-              onChange={e => setIdentifier(e.target.value)}
-              className="pl-11 bg-white/5 border-white/10 h-12 text-base focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-              placeholder="you@example.com or your_username"
-              autoComplete="username"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
-          <div className="relative">
-            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              id="password"
-              type={showPwd ? "text" : "password"}
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="pl-11 pr-11 bg-white/5 border-white/10 h-12 text-base focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-              placeholder="••••••"
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPwd(s => !s)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between text-xs">
-          <label className="flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-            <input type="checkbox" className="rounded border-white/20 bg-white/5" />
-            Remember me
-          </label>
-          <Link href="/auth/login" className="text-emerald-400 hover:text-emerald-300 transition-colors">
-            Forgot password?
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <Link href="/" className="inline-flex items-center gap-2 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-amber-500/40">Q</div>
+            <span className="text-2xl font-bold">QuickCash</span>
           </Link>
+          <p className="text-sm text-muted-foreground">Welcome back! Sign in to keep earning.</p>
         </div>
 
-        <Button
-          type="submit"
-          disabled={loading}
-          size="lg"
-          className="w-full h-12 bg-gradient-to-r from-emerald-500 via-emerald-400 to-cyan-500 text-slate-950 hover:from-emerald-400 hover:via-emerald-300 hover:to-cyan-400 glow font-semibold text-base group"
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" />
-              Signing in...
-            </span>
-          ) : (
-            <>
-              Sign in
-              <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </>
-          )}
-        </Button>
+        <div className="glass-strong gradient-border rounded-3xl p-6 md:p-8">
+          <Button
+            onClick={handleGoogle}
+            disabled={submitting || loading}
+            size="lg"
+            variant="outline"
+            className="w-full h-12 glass mb-4 text-base font-medium"
+          >
+            <Chrome className="w-5 h-5 mr-2 text-blue-400" />
+            Continue with Google
+          </Button>
 
-        {/* Quick demo credentials hint */}
-        <div className="rounded-2xl p-3 bg-gradient-to-br from-emerald-500/8 to-cyan-500/5 border border-emerald-500/20 text-xs space-y-1.5">
-          <p className="flex items-center gap-1.5 text-emerald-300 font-semibold">
-            <Sparkles className="w-3 h-3" /> Demo account
-          </p>
-          <p className="text-muted-foreground font-mono">
-            <span className="text-foreground">user:</span> yobbyking2 <span className="text-muted-foreground/60">·</span> <span className="text-foreground">pass:</span> secret123
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">or sign in with email</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
+              <Input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="bg-white/5 border-white/10 h-12" placeholder="you@example.com" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input id="password" type={showPwd ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} className="pl-11 pr-11 bg-white/5 border-white/10 h-12" placeholder="••••••" />
+                <button type="button" onClick={() => setShowPwd(s => !s)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <Button
+              type="submit"
+              disabled={submitting || loading}
+              size="lg"
+              className="w-full h-12 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 hover:from-amber-400 hover:to-orange-400 glow font-semibold"
+            >
+              {submitting || loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                <>Sign In <ArrowRight className="ml-2 w-4 h-4" /></>
+              )}
+            </Button>
+          </form>
+
+          <p className="text-center text-xs text-muted-foreground mt-4">
+            Don't have an account? <Link href="/auth/register" className="text-amber-400 hover:text-amber-300 font-medium">Sign up free</Link>
           </p>
         </div>
-      </form>
-    </AuthShell>
+
+        <p className="text-center text-xs text-muted-foreground">
+          <Shield className="inline w-3 h-3 mr-1 text-emerald-400" />
+          Protected by Firebase Authentication
+        </p>
+      </div>
+    </div>
   );
 }

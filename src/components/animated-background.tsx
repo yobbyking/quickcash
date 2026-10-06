@@ -65,7 +65,7 @@ export function AnimatedBackground() {
         vy: (Math.random() - 0.5) * 0.25,
         r: 0.6 + Math.random() * 1.8,
         // hues around emerald (155) and cyan (190)
-        hue: Math.random() > 0.5 ? 155 + Math.random() * 10 : 185 + Math.random() * 12,
+        hue: Math.random() > 0.5 ? 30 + Math.random() * 20 : 50 + Math.random() * 20,
         alpha: 0.2 + Math.random() * 0.4,
         twinkle: Math.random() * Math.PI * 2,
       };
@@ -115,7 +115,7 @@ export function AnimatedBackground() {
           const dist = Math.hypot(dx, dy);
           if (dist < 140) {
             const alpha = (1 - dist / 140) * 0.18;
-            ctx.strokeStyle = `hsla(170, 70%, 65%, ${alpha})`;
+            ctx.strokeStyle = `hsla(40, 85%, 60%, ${alpha})`;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
@@ -143,32 +143,32 @@ export function AnimatedBackground() {
       className="fixed inset-0 -z-10 overflow-hidden pointer-events-none"
     >
       {/* Base dark gradient */}
-      <div className="absolute inset-0 bg-[#040a13]" />
+      <div className="absolute inset-0 bg-[#08060f]" />
 
-      {/* Aurora gradient 1 — emerald */}
+      {/* Aurora gradient 1 — amber */}
       <div
         className="absolute -inset-[20%] opacity-50 blur-3xl"
         style={{
           background:
-            "radial-gradient(40% 40% at 20% 20%, rgba(52, 211, 153, 0.35), transparent 60%), radial-gradient(50% 50% at 80% 80%, rgba(6, 182, 212, 0.30), transparent 60%)",
+            "radial-gradient(40% 40% at 20% 20%, rgba(251, 191, 36, 0.30), transparent 60%), radial-gradient(50% 50% at 80% 80%, rgba(249, 115, 22, 0.25), transparent 60%)",
           animation: "aurora1 18s ease-in-out infinite alternate",
         }}
       />
-      {/* Aurora gradient 2 — cyan (offset timing) */}
+      {/* Aurora gradient 2 — orange (offset timing) */}
       <div
         className="absolute -inset-[20%] opacity-40 blur-3xl"
         style={{
           background:
-            "radial-gradient(35% 35% at 80% 25%, rgba(34, 211, 238, 0.30), transparent 60%), radial-gradient(45% 45% at 20% 80%, rgba(110, 231, 183, 0.20), transparent 60%)",
+            "radial-gradient(35% 35% at 80% 25%, rgba(249, 115, 22, 0.25), transparent 60%), radial-gradient(45% 45% at 20% 80%, rgba(245, 158, 11, 0.20), transparent 60%)",
           animation: "aurora2 22s ease-in-out infinite alternate",
         }}
       />
-      {/* Aurora gradient 3 — subtle magenta highlight for premium feel */}
+      {/* Aurora gradient 3 — subtle gold highlight for premium feel */}
       <div
         className="absolute -inset-[20%] opacity-25 blur-3xl"
         style={{
           background:
-            "radial-gradient(30% 30% at 50% 50%, rgba(168, 85, 247, 0.15), transparent 70%)",
+            "radial-gradient(30% 30% at 50% 50%, rgba(217, 119, 6, 0.18), transparent 70%)",
           animation: "aurora3 28s ease-in-out infinite alternate",
         }}
       />
@@ -178,7 +178,7 @@ export function AnimatedBackground() {
         className="absolute inset-0 opacity-[0.04]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(52, 211, 153, 0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(52, 211, 153, 0.6) 1px, transparent 1px)",
+            "linear-gradient(rgba(251, 191, 36, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(251, 191, 36, 0.5) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
           maskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 100%)",
           WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 100%)",
@@ -190,7 +190,7 @@ export function AnimatedBackground() {
         className="absolute inset-x-0 top-0 h-32"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(4, 10, 19, 0.6), transparent)",
+            "linear-gradient(to bottom, rgba(8, 6, 15, 0.6), transparent)",
         }}
       />
 
@@ -201,7 +201,7 @@ export function AnimatedBackground() {
       <div
         className="absolute inset-x-0 bottom-0 h-32"
         style={{
-          background: "linear-gradient(to top, rgba(4, 10, 19, 0.6), transparent)",
+          background: "linear-gradient(to top, rgba(8, 6, 15, 0.6), transparent)",
         }}
       />
 
