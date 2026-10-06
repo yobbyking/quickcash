@@ -31,6 +31,7 @@ export interface AppUser {
   phone: string;
   tier: string;
   isActivated: boolean;
+  isEmailVerified: boolean;
   balance: number;
   totalEarned: number;
   tasksCompleted: number;

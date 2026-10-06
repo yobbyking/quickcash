@@ -31,6 +31,9 @@ export default function ActivatePage() {
 
   useEffect(() => {
     if (!loading && !appUser) router.push('/auth/login');
+    if (!loading && appUser && !appUser.isEmailVerified) {
+      router.push(`/auth/verify-email?email=${encodeURIComponent(appUser.email)}`);
+    }
   }, [loading, appUser, router]);
 
   useEffect(() => {

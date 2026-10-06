@@ -55,6 +55,12 @@ export async function POST(req: NextRequest) {
     const checkoutId = data?.CheckoutRequestID || data?.checkout_request_id;
     if (checkoutId) await db.payment.update({ where: { id: payment.id }, data: { checkoutRequestId: checkoutId } });
 
+    // Send withdrawal initiated email (async)
+    const { sendWithdrawalInitiatedEmail } = await import('@/lib/email');
+    sendWithdrawalInitiatedEmail(user.email, user.username, amount, phone)
+      .then(() => console.log(`[withdraw] withdrawal email sent to ${user.email}`))
+      .catch(err => console.error('[withdraw] email send error:', err));
+
     return NextResponse.json({ paymentId: payment.id, message: 'Withdrawal initiated. M-Pesa arrives in 1-2 min.' });
   } catch (err) {
     console.error('[withdraw] error:', err);

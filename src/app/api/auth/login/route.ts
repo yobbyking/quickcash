@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
       phone: user.phone,
       tier: user.tier,
       isActivated: user.isActivated,
+      isEmailVerified: user.isEmailVerified,
       balance: user.balance,
       totalEarned: user.totalEarned,
       tasksCompleted: user.tasksCompleted,

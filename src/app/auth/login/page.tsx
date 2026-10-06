@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import {
-  Eye, EyeOff, Lock, ArrowRight, Chrome, Shield,
+  Eye, EyeOff, Lock, ArrowRight, Chrome, Shield, Mail, CheckCircle2,
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -24,7 +24,13 @@ export default function LoginPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (!loading && appUser) {
-      router.push(appUser.isActivated ? '/dashboard' : '/auth/activate');
+      if (!appUser.isEmailVerified) {
+        router.push(`/auth/verify-email?email=${encodeURIComponent(appUser.email)}`);
+      } else if (!appUser.isActivated) {
+        router.push('/auth/activate');
+      } else {
+        router.push('/dashboard');
+      }
     }
   }, [appUser, loading, router]);
 
@@ -95,6 +101,11 @@ export default function LoginPage() {
                   {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+            <div className="text-right">
+              <Link href="/auth/forgot-password" className="text-xs text-amber-400 hover:text-amber-300 font-medium">
+                Forgot password?
+              </Link>
             </div>
             <Button
               type="submit"

@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
         // Mark user as verified + give referral bonus to referrer (10 KES)
         await db.user.update({
           where: { id: user.id },
-          data: { isVerified: true },
+          data: { isActivated: true },
         });
 
         // Create a CREDIT transaction for the activation
@@ -171,6 +171,12 @@ export async function POST(req: NextRequest) {
             relatedPaymentId: payment.id,
           },
         });
+
+        // Send activation success email (async)
+        const { sendActivationSuccessEmail } = await import('@/lib/email');
+        sendActivationSuccessEmail(user.email, user.username, user.tier || 'silver')
+          .then(() => console.log(`[webhook] activation success email sent to ${user.email}`))
+          .catch(err => console.error('[webhook] activation email send error:', err));
 
         // Referral bonus
         if (user.referredById) {

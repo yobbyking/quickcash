@@ -48,7 +48,13 @@ function RegisterContent() {
   // If user is already logged in and activated, redirect
   useEffect(() => {
     if (!loading && appUser) {
-      router.push(appUser.isActivated ? '/dashboard' : '/auth/activate');
+      if (!appUser.isEmailVerified) {
+        router.push(`/auth/verify-email?email=${encodeURIComponent(appUser.email)}`);
+      } else if (!appUser.isActivated) {
+        router.push('/auth/activate');
+      } else {
+        router.push('/dashboard');
+      }
     }
   }, [appUser, loading, router]);
 
@@ -88,8 +94,8 @@ function RegisterContent() {
         tier,
         referralCode: form.referralCode || undefined,
       });
-      toast.success('Registration complete! Activate your account to start earning.');
-      router.push('/auth/activate');
+      toast.success('Account created! Check your email for the verification code.');
+      router.push(`/auth/verify-email?email=${encodeURIComponent(form.email || firebaseUser?.email || '')}`);
     } catch (err: any) {
       toast.error(err.message || 'Registration failed');
     } finally {

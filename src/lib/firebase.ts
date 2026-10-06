@@ -2,27 +2,25 @@
  * lib/firebase.ts — Firebase client SDK initialization.
  *
  * Used for Google sign-in + email/password auth on the client side.
- * Server-side validation uses the Firebase Admin SDK (separate file).
+ * The client config is safe to expose (Firebase client keys are public).
  *
- * Required env vars (set in Vercel):
- *   NEXT_PUBLIC_FIREBASE_API_KEY
- *   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
- *   NEXT_PUBLIC_FIREBASE_PROJECT_ID
- *   NEXT_PUBLIC_FIREBASE_APP_ID
- *
- * Get these from https://console.firebase.google.com → Project Settings → "General" → "Your apps"
+ * Service account credentials for server-side verification are in
+ * lib/firebase-admin.ts (via env vars FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL,
+ * FIREBASE_PRIVATE_KEY).
  */
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
+// Firebase project: xtechstk
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyC8gzrjsiN9XirOJUpisQEx267d3FSoe3U",
+  authDomain: "xtechstk.firebaseapp.com",
+  projectId: "xtechstk",
+  storageBucket: "xtechstk.firebasestorage.app",
+  messagingSenderId: "107867078074",
+  appId: "1:107867078074:web:8b5b708274fba22e3a7183",
+  measurementId: "G-45MPVJD5CG",
 };
 
 // Initialize once (avoid double-init on HMR)

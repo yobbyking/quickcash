@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyIdToken } from '@/lib/firebase-admin';
-import { generateReferralCode } from '@/lib/auth';
+import { generateReferralCode, TIERS } from '@/lib/auth';
+import { generateCode, sendVerificationEmail } from '@/lib/email';
 import { z } from 'zod';
 
 const RegisterSchema = z.object({
-  idToken: z.string(),  // Firebase ID token (from Google or email/password sign-in)
+  idToken: z.string(),
   username: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, underscores'),
   phone: z.string().min(10).max(15),
   tier: z.enum(['silver', 'gold', 'vip']).default('silver'),
@@ -24,7 +25,6 @@ export async function POST(req: NextRequest) {
     }
     const { idToken, username, phone, tier, referralCode, displayName, photoURL } = parsed.data;
 
-    // Verify the Firebase ID token (proves the user actually signed in with Google or email/password)
     const decoded = await verifyIdToken(idToken);
     if (!decoded || !decoded.uid || !decoded.email) {
       return NextResponse.json({ error: 'Invalid Firebase token' }, { status: 401 });
@@ -59,8 +59,11 @@ export async function POST(req: NextRequest) {
       referredById = ref.id;
     }
 
-    // Generate unique referral code for new user
     const code = generateReferralCode(username);
+
+    // Generate a 6-digit email verification code (expires in 10 min)
+    const verificationCode = generateCode();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     const user = await db.user.create({
       data: {
@@ -72,10 +75,21 @@ export async function POST(req: NextRequest) {
         photoURL: photoURL || decoded.picture || null,
         tier,
         isActivated: false,
+        isEmailVerified: false,
+        verificationCode,
+        verificationCodeExpiresAt: codeExpiresAt,
         referralCode: code,
         referredById,
       },
     });
+
+    // Send verification email (async, don't block registration)
+    sendVerificationEmail(email, verificationCode, user.username)
+      .then(r => {
+        if (r.success) console.log(`[register] verification email sent to ${email}`);
+        else console.warn(`[register] email send failed for ${email}:`, r.error);
+      })
+      .catch(err => console.error('[register] email send error:', err));
 
     return NextResponse.json({
       id: user.id,
@@ -84,10 +98,12 @@ export async function POST(req: NextRequest) {
       phone: user.phone,
       tier: user.tier,
       isActivated: user.isActivated,
+      isEmailVerified: user.isEmailVerified,
       balance: user.balance,
       referralCode: user.referralCode,
       displayName: user.displayName,
       photoURL: user.photoURL,
+      message: 'Account created. Check your email for a 6-digit verification code.',
     });
   } catch (err) {
     console.error('[register] error:', err);

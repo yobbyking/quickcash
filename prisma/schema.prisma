@@ -20,6 +20,12 @@ model User {
   passwordHash    String?  // for email/password auth (Firebase also handles this)
   tier            String   @default("silver")  // silver | gold | vip
   isActivated     Boolean  @default(false)
+  isEmailVerified Boolean  @default(false)
+  verificationCode      String?
+  verificationCodeExpiresAt DateTime?
+  emailVerifiedAt DateTime?
+  resetToken       String?
+  resetTokenExpiresAt DateTime?
   balance         Float    @default(0)
   totalEarned     Float    @default(0)
   tasksCompleted  Int      @default(0)
