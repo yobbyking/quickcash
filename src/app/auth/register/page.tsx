@@ -104,8 +104,6 @@ function RegisterContent() {
           toast.success('Account created! Complete your details below.');
         } catch (err: any) {
           toast.error(err.message || 'Sign up failed');
-          setSubmitting(false);
-          return;
         }
         return; // Will re-render with needsRegistration=true
       }
@@ -134,8 +132,7 @@ function RegisterContent() {
         return;
       }
 
-      try {
-        await completeRegistration({
+      await completeRegistration({
         username: form.username,
         phone: form.phone,
         tier,
