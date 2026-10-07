@@ -23,7 +23,7 @@ const TIERS = [
 function RegisterContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const { appUser, needsRegistration, completeRegistration, firebaseUser, loading, signUpWithEmail } = useAuth();
+  const { appUser, needsRegistration, completeRegistration, firebaseUser, loading, signUpWithEmail, signInWithGoogle, signOut } = useAuth();
 
   const [form, setForm] = useState({
     email: '',
@@ -117,7 +117,25 @@ function RegisterContent() {
         return;
       }
 
-      await completeRegistration({
+      // Validate required fields
+      if (!form.username || form.username.length < 3) {
+        toast.error('Enter a username (min 3 characters)');
+        setSubmitting(false);
+        return;
+      }
+      if (!form.phone || form.phone.length < 10) {
+        toast.error('Enter a valid M-Pesa phone number');
+        setSubmitting(false);
+        return;
+      }
+      if (!form.fullName) {
+        toast.error('Enter your full name');
+        setSubmitting(false);
+        return;
+      }
+
+      try {
+        await completeRegistration({
         username: form.username,
         phone: form.phone,
         tier,
@@ -136,7 +154,6 @@ function RegisterContent() {
   const handleGoogle = async () => {
     setSubmitting(true);
     try {
-      const { signInWithGoogle } = useAuth();
       await signInWithGoogle();
     } catch (err: any) {
       toast.error(err.message || 'Google sign-in failed');
@@ -186,9 +203,21 @@ function RegisterContent() {
           )}
 
           {firebaseUser && (
-            <div className="mb-4 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Signed in as <span className="font-medium">{firebaseUser.email}</span></span>
+            <div className="mb-4 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>Signed in as <span className="font-medium">{firebaseUser.email}</span></span>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  await signOut();
+                  window.location.reload();
+                }}
+                className="text-xs text-muted-foreground hover:text-red-400 transition-colors"
+              >
+                Sign out
+              </button>
             </div>
           )}
 
