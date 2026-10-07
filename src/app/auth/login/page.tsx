@@ -11,7 +11,7 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { appUser, loading, signInWithGoogle, signInWithEmail } = useAuth();
+  const { appUser, loading, needsRegistration, signInWithGoogle, signInWithEmail } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,8 +19,15 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Redirect logic
   useEffect(() => {
-    if (!loading && appUser) {
+    if (loading) return;
+    if (needsRegistration) {
+      // Google sign-in succeeded but user not in our DB → redirect to register
+      router.push('/auth/register');
+      return;
+    }
+    if (appUser) {
       if (!appUser.isEmailVerified) {
         router.push(`/auth/verify-email?email=${encodeURIComponent(appUser.email)}`);
       } else if (!appUser.isActivated) {
@@ -29,17 +36,19 @@ export default function LoginPage() {
         router.push('/dashboard');
       }
     }
-  }, [appUser, loading, router]);
+  }, [appUser, loading, needsRegistration, router]);
 
   const handleGoogle = async () => {
     setSubmitting(true);
     setErrorMsg(null);
     try {
       await signInWithGoogle();
+      // The auth state change listener will handle redirect
       toast.success('Welcome back!');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Google sign-in failed');
-      toast.error(err.message || 'Google sign-in failed');
+      const msg = err.message || 'Google sign-in failed';
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -53,17 +62,21 @@ export default function LoginPage() {
       await signInWithEmail(email, password);
       toast.success('Welcome back!');
     } catch (err: any) {
-      // Show the error inline + as toast
-      setErrorMsg(err.message || 'Login failed');
-      toast.error(err.message || 'Login failed');
+      const msg = err.message || 'Login failed';
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Glow orbs */}
+      <div className="absolute top-0 left-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 pointer-events-none" />
+
+      <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand */}
         <div className="text-center">
           <Link href="/" className="inline-flex items-center gap-2 mb-2">
@@ -98,7 +111,7 @@ export default function LoginPage() {
 
           {/* Error display */}
           {errorMsg && (
-            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-2 text-sm text-red-300">
+            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-2 text-sm text-red-300 animate-shake">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>

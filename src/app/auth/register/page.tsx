@@ -52,7 +52,11 @@ function RegisterContent() {
       else if (!appUser.isActivated) router.push('/auth/activate');
       else router.push('/dashboard');
     }
-  }, [appUser, loading, router]);
+    // If Google sign-in returned and needs registration, pre-fill the email
+    if (!loading && needsRegistration && firebaseUser) {
+      setForm(f => ({ ...f, email: firebaseUser.email || '' }));
+    }
+  }, [appUser, loading, router, needsRegistration, firebaseUser]);
 
   const update = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
