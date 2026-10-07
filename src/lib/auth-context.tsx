@@ -1,21 +1,5 @@
 'use client';
 
-/**
- * AuthContext — client-side auth state using Firebase + our backend.
- *
- * Flow:
- * 1. User signs in via Firebase (Google popup or email/password)
- * 2. We get the Firebase ID token
- * 3. We POST it to /api/auth/login — if user exists, returns our user
- * 4. If user doesn't exist (404), we POST to /api/auth/register with extra fields
- *
- * The provider stores:
- *   - firebaseUser (raw Firebase user)
- *   - appUser (our DB user with tier, balance, etc.) — null until registration complete
- *   - loading (true during initial load)
- *   - error (last error message)
- */
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
@@ -47,16 +31,35 @@ interface AuthContextValue {
   appUser: AppUser | null;
   loading: boolean;
   error: string | null;
-  needsRegistration: boolean;  // true if Firebase user exists but our DB record doesn't
+  needsRegistration: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
-  completeRegistration: (data: { username: string; phone: string; tier: string; referralCode?: string }) => Promise<void>;
+  completeRegistration: (data: { username: string; phone: string; tier: string; displayName?: string; referralCode?: string }) => Promise<void>;
   refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+// Firebase error code → human-readable message
+function firebaseErrorMessage(code: string): string {
+  const map: Record<string, string> = {
+    'auth/invalid-email': 'Invalid email address format',
+    'auth/user-disabled': 'This account has been disabled',
+    'auth/user-not-found': 'No account found with this email. Please register first.',
+    'auth/wrong-password': 'Incorrect password. Please try again.',
+    'auth/invalid-credential': 'Invalid email or password. Please check and try again.',
+    'auth/email-already-in-use': 'An account with this email already exists. Please log in.',
+    'auth/weak-password': 'Password should be at least 6 characters',
+    'auth/popup-closed-by-user': 'Google sign-in was cancelled',
+    'auth/popup-blocked': 'Popup was blocked by your browser. Please allow popups and try again.',
+    'auth/network-request-failed': 'Network error. Check your internet connection.',
+    'auth/too-many-requests': 'Too many attempts. Please wait a few minutes and try again.',
+    'auth/operation-not-allowed': 'Email/password sign-in is not enabled. Contact support.',
+  };
+  return map[code] || code.replace('auth/', '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -66,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsRegistration, setNeedsRegistration] = useState(false);
   const [idToken, setIdToken] = useState<string | null>(null);
 
-  // Subscribe to Firebase auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setLoading(true);
@@ -75,7 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const token = await fbUser.getIdToken();
           setIdToken(token);
-          // Try login first
           const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -86,14 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAppUser(data);
             setNeedsRegistration(false);
           } else if (res.status === 404) {
-            // Need to complete registration
             setNeedsRegistration(true);
             setAppUser(null);
           } else {
             const data = await res.json().catch(() => ({}));
             setError(data.error || 'Login failed');
           }
-        } catch (err) {
+        } catch (err: any) {
           setError(err.message || 'Network error');
         }
       } else {
@@ -116,12 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       setAppUser(data);
       setNeedsRegistration(false);
+      return data;
     } else if (res.status === 404) {
       setNeedsRegistration(true);
       setAppUser(null);
+      throw new Error('NEEDS_REGISTRATION');
     } else {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || 'Login failed');
+      throw new Error(data.error || 'Login failed');
     }
   }
 
@@ -133,7 +135,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIdToken(token);
       await fetchAppUser(token);
     } catch (err: any) {
-      setError(err.message || 'Google sign-in failed');
+      const msg = err.code ? firebaseErrorMessage(err.code) : (err.message || 'Google sign-in failed');
+      setError(msg);
+      throw new Error(msg);
     }
   };
 
@@ -145,7 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIdToken(token);
       await fetchAppUser(token);
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      const msg = err.code ? firebaseErrorMessage(err.code) : (err.message || 'Login failed');
+      setError(msg);
+      throw new Error(msg);
     }
   };
 
@@ -155,18 +161,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       const token = await result.user.getIdToken();
       setIdToken(token);
-      // After signup, Firebase user exists but our DB record doesn't yet
       setNeedsRegistration(true);
+      return result;
     } catch (err: any) {
-      setError(err.message || 'Sign up failed');
+      const msg = err.code ? firebaseErrorMessage(err.code) : (err.message || 'Sign up failed');
+      setError(msg);
+      throw new Error(msg);
     }
   };
 
-  const completeRegistration = async (data: { username: string; phone: string; tier: string; referralCode?: string }) => {
+  const completeRegistration = async (data: { username: string; phone: string; tier: string; displayName?: string; referralCode?: string }) => {
     setError(null);
     if (!idToken) {
-      setError('Not signed in with Firebase');
-      return;
+      setError('Not signed in. Please refresh and try again.');
+      throw new Error('Not signed in');
     }
     try {
       const res = await fetch('/api/auth/register', {
@@ -177,20 +185,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await res.json();
       if (!res.ok) {
         setError(result.error || 'Registration failed');
-        return;
+        throw new Error(result.error || 'Registration failed');
       }
       setAppUser(result);
       setNeedsRegistration(false);
+      return result;
     } catch (err: any) {
-      setError(err.message || 'Registration failed');
+      const msg = err.message || 'Registration failed';
+      setError(msg);
+      throw new Error(msg);
     }
   };
 
   const refreshUser = async () => {
     if (firebaseUser) {
-      const token = await firebaseUser.getIdToken(true);  // force refresh
+      const token = await firebaseUser.getIdToken(true);
       setIdToken(token);
-      await fetchAppUser(token);
+      try {
+        await fetchAppUser(token);
+      } catch {}
     }
   };
 
